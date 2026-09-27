@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Генератор бюджета ФОТ — Alfa-Service</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',sans-serif;background:#F7F5FF;color:#260A5B;min-height:100vh;
+       display:flex;align-items:center;justify-content:center;padding:24px}
+  .card{background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(38,10,91,.08);
+        padding:36px 40px;max-width:480px;width:100%}
+  .logo{font-size:32px;font-weight:700;color:#A897FC;background:#260A5B;
+        display:inline-block;padding:8px 18px;border-radius:8px;margin-bottom:20px}
+  h1{font-size:18px;font-weight:600;margin-bottom:6px}
+  p.sub{font-size:13px;color:#6b6483;margin-bottom:24px}
+  .drop{border:2px dashed #D9CFF7;border-radius:10px;padding:28px;text-align:center;
+        cursor:pointer;transition:.2s;margin-bottom:16px}
+  .drop:hover,.drop.over{border-color:#A897FC;background:#EFEAFE}
+  .drop input{display:none}
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:12px;color:#6b6483;margin-bottom:4px}
+  .field input{width:100%;padding:8px 12px;border:1px solid #D9CFF7;border-radius:8px;
+               font-family:inherit;font-size:13px}
+  .row{display:flex;gap:10px}
+  .row .field{flex:1}
+  button{width:100%;padding:12px;background:#260A5B;color:#A897FC;border:none;
+         border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;margin-top:8px}
+  button:hover{background:#3D1878}
+  button:disabled{background:#94a3b8;cursor:not-allowed}
+  button.secondary{background:#EFEAFE;color:#260A5B}
+  button.secondary:hover{background:#D9CFF7}
+  #status{margin-top:14px;font-size:13px;text-align:center}
+  .ok{color:#166534} .err{color:#dc2626}
+  .step{display:none}
+  .step.active{display:block}
+  .positions-list{max-height:280px;overflow-y:auto;border:1px solid #EFEAFE;border-radius:8px;
+                  padding:8px;margin-bottom:14px}
+  .position-row{display:flex;align-items:center;justify-content:space-between;
+                padding:8px 6px;border-bottom:1px solid #F7F5FF;font-size:13px}
+  .position-row:last-child{border-bottom:none}
+  .position-row .pos-name{flex:1}
+  .toggle-group{display:flex;gap:4px;background:#F7F5FF;border-radius:6px;padding:2px}
+  .toggle-btn{padding:4px 10px;border-radius:5px;font-size:11px;font-weight:600;
+              cursor:pointer;border:none;background:transparent;color:#6b6483}
+  .toggle-btn.active-fix{background:#F0DDB8;color:#7A4A00}
+  .toggle-btn.active-smena{background:#D6EBD9;color:#1F5C2E}
+  .obj-info{background:#EFEAFE;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:13px}
+  .obj-info b{display:block;margin-bottom:2px}
+  .back-link{font-size:12px;color:#6b6483;cursor:pointer;margin-bottom:12px;display:inline-block}
+  .back-link:hover{color:#260A5B}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">alfa</div>
+    <h1>Генератор бюджета ФОТ</h1>
+    <p class="sub">Загрузите штатный расчёт — получите готовый бюджет в фирменном стиле, с формулами</p>
+
+    <!-- ═══ ШАГ 1: Загрузка файла ═══ -->
+    <div class="step active" id="step1">
+      <form id="uploadForm">
+        <div class="drop" id="drop">
+          <input type="file" id="fileInput" name="file" accept=".xlsx,.xls" required>
+          <div id="dropLabel">📂 Выбрать файл .xlsx или перетащить сюда</div>
+        </div>
+        <button type="submit" id="parseBtn">Далее — проверить должности</button>
+      </form>
+      <div id="status1"></div>
+    </div>
+
+    <!-- ═══ ШАГ 2: Дата, срок, тип должностей ═══ -->
+    <div class="step" id="step2">
+      <span class="back-link" onclick="goToStep(1)">← назад к загрузке файла</span>
+      <div class="obj-info" id="objInfo"></div>
+
+      <div class="row">
+        <div class="field">
+          <label>Дата начала оказания услуг</label>
+          <input type="date" id="startDate" name="start_date" required>
+        </div>
+        <div class="field">
+          <label>Срок, лет</label>
+          <input type="number" id="nYears" name="n_years" step="0.5" min="0.5" value="1" required>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Скидка на расходники, % (необязательно)</label>
+        <input type="number" id="discount" name="discount" min="0" max="100" placeholder="напр. 20">
+      </div>
+
+      <div class="field">
+        <label>Тип оплаты по должностям — можно поменять после генерации прямо в Excel (первый месяц → остальные пересчитаются сами)</label>
+        <div class="positions-list" id="positionsList"></div>
+      </div>
+
+      <button type="button" id="generateBtn">Сформировать бюджет</button>
+      <div id="status2"></div>
+    </div>
+  </div>
+
+<script>
+let uploadedFile = null;
+let positionsData = [];
+
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('fileInput');
+const dropLabel = document.getElementById('dropLabel');
+
+drop.addEventListener('click', () => fileInput.click());
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => {
+  e.preventDefault(); drop.classList.remove('over');
+  fileInput.files = e.dataTransfer.files;
+  updateLabel();
+});
+fileInput.addEventListener('change', updateLabel);
+function updateLabel(){
+  if (fileInput.files[0]) dropLabel.textContent = '✓ ' + fileInput.files[0].name;
+}
+
+function goToStep(n){
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+  document.getElementById('step' + n).classList.add('active');
+}
+
+document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const status = document.getElementById('status1');
+  const btn = document.getElementById('parseBtn');
+  if (!fileInput.files[0]) { status.textContent = 'Выберите файл'; status.className='err'; return; }
+
+  uploadedFile = fileInput.files[0];
+  btn.disabled = true; btn.textContent = 'Разбираю файл...';
+  status.textContent = '';
+
+  const formData = new FormData();
+  formData.append('file', uploadedFile);
+
+  try {
+    const resp = await fetch('/api/parse-preview', { method: 'POST', body: formData });
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.error || 'Ошибка парсинга');
+    }
+    const data = await resp.json();
+    positionsData = data.positions;
+
+    document.getElementById('objInfo').innerHTML =
+      `<b>${data.obj_name || 'Объект'}</b>${data.obj_addr ? data.obj_addr : ''}
+       <div style="margin-top:4px;color:#6b6483;">Должностей найдено: ${data.positions.length} · срок в файле: ${data.contract_months_hint} мес.</div>`;
+
+    const list = document.getElementById('positionsList');
+    list.innerHTML = '';
+    positionsData.forEach((p, i) => {
+      const row = document.createElement('div');
+      row.className = 'position-row';
+      row.innerHTML = `
+        <span class="pos-name">${p.pos}</span>
+        <div class="toggle-group" data-pos="${p.pos}">
+          <button type="button" class="toggle-btn fix-btn ${p.auto_fix ? 'active-fix' : ''}">Фикс</button>
+          <button type="button" class="toggle-btn smena-btn ${!p.auto_fix ? 'active-smena' : ''}">Смена</button>
+        </div>`;
+      list.appendChild(row);
+    });
+    // переключатели
+    list.querySelectorAll('.toggle-group').forEach(g => {
+      const fixBtn = g.querySelector('.fix-btn');
+      const smenaBtn = g.querySelector('.smena-btn');
+      fixBtn.addEventListener('click', () => {
+        fixBtn.classList.add('active-fix'); smenaBtn.classList.remove('active-smena');
+      });
+      smenaBtn.addEventListener('click', () => {
+        smenaBtn.classList.add('active-smena'); fixBtn.classList.remove('active-fix');
+      });
+    });
+
+    // дата по умолчанию — сегодня
+    document.getElementById('startDate').value = new Date().toISOString().slice(0,10);
+
+    goToStep(2);
+  } catch (err) {
+    status.textContent = '✗ ' + err.message;
+    status.className = 'err';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Далее — проверить должности';
+  }
+});
+
+document.getElementById('generateBtn').addEventListener('click', async () => {
+  const status = document.getElementById('status2');
+  const btn = document.getElementById('generateBtn');
+  btn.disabled = true; btn.textContent = 'Формирование...';
+  status.textContent = '';
+
+  const formData = new FormData();
+  formData.append('file', uploadedFile);
+  formData.append('start_date', document.getElementById('startDate').value);
+  formData.append('n_years', document.getElementById('nYears').value);
+  const discount = document.getElementById('discount').value;
+  if (discount) formData.append('discount', discount);
+
+  document.querySelectorAll('.toggle-group').forEach(g => {
+    const pos = g.dataset.pos;
+    const isFix = g.querySelector('.fix-btn').classList.contains('active-fix');
+    formData.append(`oklad_overrides[${pos}]`, isFix ? '1' : '0');
+  });
+
+  try {
+    const resp = await fetch('/api/budget', { method: 'POST', body: formData });
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.error || 'Ошибка сервера');
+    }
+    const blob = await resp.blob();
+    const disposition = resp.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="?([^"]+)"?/);
+    const filename = match ? match[1] : 'budget.xlsx';
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+
+    status.textContent = '✓ Файл скачан: ' + filename;
+    status.className = 'ok';
+  } catch (err) {
+    status.textContent = '✗ ' + err.message;
+    status.className = 'err';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Сформировать бюджет';
+  }
+});
+</script>
+</body>
+</html>
