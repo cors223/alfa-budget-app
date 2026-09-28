@@ -89,7 +89,6 @@ def api_budget():
     except ValueError:
         n_years = 1.0
 
-    discount_pct = request.form.get('discount')
 
     # Ручные переопределения Фикс/Смена — приходят из формы как
     # oklad_overrides[Должность]=1 или 0 (чекбоксы на превью-шаге)
@@ -121,9 +120,6 @@ def api_budget():
         f"{months[-1]['d2']:02d}.{months[-1]['mn']:02d}.{months[-1]['yr']}"
     )
 
-    discount = None
-    if discount_pct:
-        discount = 1 - (float(discount_pct) / 100)
 
     # budget_engine.parse_budget_sheet() возвращает вложенные словари
     # {'chem': {'label':.., 'total':..}, ...} + отдельный ключ 'equipment'.
@@ -143,7 +139,6 @@ def api_budget():
         months=months,
         budget=flat_budget,
         equipment=equipment,
-        discount=discount,
     )
 
     buf = io.BytesIO()
