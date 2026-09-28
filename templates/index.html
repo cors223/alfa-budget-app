@@ -195,8 +195,6 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
   formData.append('file', uploadedFile);
   formData.append('start_date', document.getElementById('startDate').value);
   formData.append('n_years', document.getElementById('nYears').value);
-  const discount = document.getElementById('discount').value;
-  if (discount) formData.append('discount', discount);
 
   document.querySelectorAll('.toggle-group').forEach(g => {
     const pos = g.dataset.pos;
